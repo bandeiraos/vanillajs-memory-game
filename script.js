@@ -5,24 +5,50 @@ const CARD_STATUS = {
     REVEALED: 'revealed'
 };
 
+const CARDS_PAIRS = 6;
+
 const divWrapper = document.querySelector('.wrapper');
 const divScore = document.querySelector('.js-score');
+const retryBtn = document.querySelector('.retry-btn');
 
-let _cards = [];
-let _selectedCard = null;
-let _score = 0;
-let _blockClick = false;
+let _selectedCards;
+let _score;
+let _moves;
+
+function setupGame() {
+    _selectedCards = [];
+    _score = 0;
+    _moves = 0;
+
+    divWrapper.innerHTML = '';
+
+    toggleRetryBtn(false);
+    drawScore();
+    fetchCountries();
+}
+
+function endGame() {
+    const finalScore = divScore.textContent;
+
+    divScore.textContent = `You Win! | ${finalScore} | Moves: ${_moves}`;
+
+    toggleRetryBtn(true);
+}
+
+function toggleRetryBtn(show) {
+    retryBtn.style.display = show ? 'block' : 'none';
+}
 
 function drawScore() {
-    divScore.textContent = `${_score} / ${_cards.length}`;
+    divScore.textContent = `Score: ${_score} / ${CARDS_PAIRS}`;
 }
 
 function setScore() {
     _score++;
     drawScore();
 
-    if (_score === _cards.length) {
-        console.log('win');
+    if (_score === CARDS_PAIRS) {
+        endGame();
     }
 }
 
@@ -31,79 +57,90 @@ function revealCard(divCard) {
     divCard.classList.add('revealed');
 }
 
-function hideCard(divCard) {
-    [divCard, _selectedCard].forEach(card => {
+function hideCard() {
+    _selectedCards.forEach(card => {
         card.classList.remove('revealed');
         card.classList.add('hidden');
     });
 }
 
-function correctCard(divCard) {
-    [divCard, _selectedCard].forEach(card => {
+function correctCard() {
+    _selectedCards.forEach(card => {
         card.classList.add('correct');
     });
 }
 
 function handleCardClick(divCard) {
-    if (!_selectedCard) {
-        _selectedCard = divCard;
+    revealCard(divCard);
 
+    _selectedCards.push(divCard);
+
+    if (_selectedCards.length < 2) {
         return;
     }
 
-    const selecterdAnswer = _selectedCard.getAttribute("data-answer");
-    const currentCardAnswer = divCard.getAttribute("data-answer");
+    _moves++;
 
-    _blockClick = true;
-
+    const answers = _selectedCards.map(card => {
+        return card.getAttribute("data-flag");
+    });
 
     setTimeout(() => {
-        if (selecterdAnswer === currentCardAnswer) {
-            correctCard(divCard);
+        if (answers[0] === answers[1]) {
+            correctCard();
             setScore();
         } else {
-            hideCard(divCard);
+            hideCard();
         }
-        _blockClick = false;
-        _selectedCard = null;
+
+        _selectedCards = [];
+
     }, 1000);
 
 }
 
-function createCards() {
-    _cards.forEach(card => {
+function createCards(chosenCountries) {
+    let domCards = [];
+
+    chosenCountries.forEach(card => {
         let divCardName = document.createElement('div'),
             divCardImg = document.createElement('div'),
             divCardNameContent = document.createElement('div'),
             divCardImgContent = document.createElement('div');
 
         divCardName.className = 'card hidden';
-        divCardName.setAttribute('data-answer', card.flag);
+        divCardName.setAttribute('data-flag', card.flag);
         divCardNameContent.textContent = card.name;
 
         divCardImg.className = 'card hidden';
-        divCardImg.setAttribute('data-answer', card.flag);
+        divCardImg.setAttribute('data-flag', card.flag);
 
         divCardImgContent.className = 'flag';
         divCardImgContent.style.backgroundImage = `url(${card.flag})`;
 
         divCardName.append(divCardNameContent);
         divCardImg.append(divCardImgContent);
-        divWrapper.append(divCardName);
-        divWrapper.append(divCardImg);
+
+        domCards.push(divCardName);
+        domCards.push(divCardImg);
     });
+
+    chosenCountries = domCards.sort(() => .5 - Math.random());
+
+    chosenCountries.forEach(card => divWrapper.appendChild(card));
 }
 
 function delegateEvt() {
-    divWrapper.addEventListener('click', (e) => {
+    document.body.addEventListener('click', (e) => {
         const targetClasslist = e.target.classList;
-        if (targetClasslist.contains(CARD_STATUS.REVEALED)) {
-            return null;
-        } else if (targetClasslist.contains(CARD_STATUS.HIDDEN)) {
-            if (_blockClick) return;
 
-            revealCard(e.target);
-            setTimeout(() => handleCardClick(e.target), 500);
+        if (targetClasslist.contains('retry-btn')) {
+            setupGame();
+        } else if (targetClasslist.contains(CARD_STATUS.HIDDEN)) {
+            if (_selectedCards.length === 2)
+                return;
+
+            handleCardClick(e.target);
         }
     });
 }
@@ -111,13 +148,14 @@ function delegateEvt() {
 async function fetchCountries() {
     const response = await fetch("./data.json"),
         data = await response.json(),
-        chosenNumbers = [];
+        chosenNumbers = [],
+        chosenCountries = [];
 
     function generateRandomNumber() {
         return Math.floor(Math.random() * 249);
     }
 
-    while (chosenNumbers.length < 6) {
+    while (chosenNumbers.length < CARDS_PAIRS) {
         const randomNumber = generateRandomNumber();
         if (!chosenNumbers.includes(randomNumber)) {
             chosenNumbers.push(randomNumber);
@@ -127,16 +165,15 @@ async function fetchCountries() {
     chosenNumbers.forEach(num => {
         const { name, flags } = data[num];
 
-        _cards.push({ name, flag: flags.png });
+        chosenCountries.push({ name, flag: flags.png });
     });
 
-
-    createCards();
+    createCards(chosenCountries);
     drawScore();
 }
 
 function start() {
-    fetchCountries();
+    setupGame();
     delegateEvt();
 }
 
